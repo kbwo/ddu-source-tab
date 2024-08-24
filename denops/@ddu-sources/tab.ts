@@ -1,3 +1,4 @@
+
 import { BaseSource, ensure, fn, is, Item } from "../deps.ts";
 import type {
   DduOptions,
@@ -99,7 +100,19 @@ export class Source extends BaseSource<Params> {
     return new ReadableStream({
       async start(controller) {
         if (args.parent === undefined) {
-          controller.enqueue(await Source.prototype.gatherTab(args));
+          const parents = await Source.prototype.gatherTab(args);
+          const items = await Promise.all(
+            parents.map(async (parent) => {
+              if (!parent.action) return [parent];
+              const children = await Source.prototype.gatherWindow(
+                args,
+                parent.action,
+              );
+              return [parent, ...children];
+            }),
+          );
+          controller.enqueue(items.flat());
+          // controller.enqueue(await Source.prototype.gatherTab(args));
         } else {
           // windowはtreeではないので、parentがある場合のparentは確定でtab
           const parentTabInfo = ensure(args.parent.action, isTabInfo);
@@ -145,6 +158,7 @@ export class Source extends BaseSource<Params> {
         // not only for isTree
         treePath: tabinfo.tabnr.toString(),
         isTree: true,
+        isExpanded: true
       });
     }
     return items;
